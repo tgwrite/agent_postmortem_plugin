@@ -35,15 +35,11 @@ export interface PostmortemRecord {
   artifact_status: "pending" | "saved" | "failed";
   artifact_path?: string;
   artifact_error?: string;
-  latest_status?: "saved" | "failed";
-  latest_error?: string;
   tool_restore_error?: string;
 }
 
 export interface ArtifactResult {
   artifact_path: string;
-  latest_status: "saved" | "failed";
-  latest_error?: string;
 }
 
 export function errorText(error: unknown): string {

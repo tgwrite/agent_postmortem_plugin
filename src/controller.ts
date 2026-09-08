@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import type { ExtensionAPI, ExtensionContext, MessageEndEvent, TurnEndEvent } from "@earendil-works/pi-coding-agent";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { writeArtifact } from "./artifact.js";
@@ -241,13 +242,12 @@ export class PostmortemController {
       }
       const complete = record.status === "completed" && record.artifact_status === "saved" &&
         sessionSaved && !record.tool_restore_error;
-      this.notify(ctx, complete ? "Postmortem saved: " + record.artifact_path :
+      const reportPath = record.artifact_path ? path.resolve(record.workspace, record.artifact_path) : undefined;
+      this.notify(ctx, complete ? "Postmortem saved: " + reportPath :
         "Postmortem " + record.status + ": " + (record.error_code ?? record.artifact_error ?? "cleanup/persistence incomplete") +
-        ". Session: " + (sessionSaved ? "saved" : "failed") + "; artifact: " + record.artifact_status + ".",
+        ". Session: " + (sessionSaved ? "saved" : "failed") + "; artifact: " + record.artifact_status + "." +
+        (reportPath ? " Report: " + reportPath : ""),
         complete ? "info" : "warning");
-      if (record.latest_status === "failed") {
-        this.notify(ctx, "Report saved, but latest.md could not be updated: " + record.latest_error, "warning");
-      }
     } finally {
       this.restore(ctx);
       this.state.move("IDLE");

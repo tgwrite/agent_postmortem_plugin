@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -27,10 +27,9 @@ describe("artifact persistence", () => {
     expect(rendered).toContain('session_id: "session:\\"quoted\\"\\nnewline"');
     expect(rendered.endsWith(input.report)).toBe(true);
     const result = await writeArtifact(input);
-    expect(result.latest_status).toBe("saved");
     const report = await readFile(path.join(input.workspace, result.artifact_path), "utf8");
     expect(report.endsWith(input.report)).toBe(true);
-    expect(await readFile(path.join(input.workspace, ".agent-postmortem/latest.md"), "utf8")).toBe(report);
+    expect(await readdir(path.join(input.workspace, ".agent-postmortem"))).toEqual(["reports"]);
   });
 
   it("refuses to overwrite a historical report", async () => {
@@ -40,12 +39,4 @@ describe("artifact persistence", () => {
     expect((await readFile(path.join(input.workspace, first.artifact_path), "utf8")).endsWith(input.report)).toBe(true);
   });
 
-  it("keeps the historical report if updating latest fails", async () => {
-    const input = await record();
-    await mkdir(path.join(input.workspace, ".agent-postmortem/latest.md"), { recursive: true });
-    const result = await writeArtifact(input);
-    expect(result.latest_status).toBe("failed");
-    expect(result.latest_error).toBeTruthy();
-    expect((await readFile(path.join(input.workspace, result.artifact_path), "utf8")).endsWith(input.report)).toBe(true);
-  });
 });

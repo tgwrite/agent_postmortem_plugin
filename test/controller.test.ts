@@ -1,3 +1,4 @@
+import path from "node:path";
 import { SessionManager, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import { PostmortemController } from "../src/controller.js";
@@ -22,7 +23,7 @@ function fixture() {
     getContextUsage: () => undefined, abort: vi.fn(), ui: { notify: vi.fn() },
   };
   const save = vi.fn(async (_record: PostmortemRecord) => ({
-    artifact_path: ".agent-postmortem/reports/test.md", latest_status: "saved" as const,
+    artifact_path: ".agent-postmortem/reports/test.md",
   }));
   const controller = new PostmortemController(pi as unknown as ExtensionAPI, save);
   const context = ctx as unknown as ExtensionContext;
@@ -71,7 +72,7 @@ describe("controller failure and ownership boundaries", () => {
   it("restores before slow persistence and serializes shutdown/finalization", async () => {
     const f = fixture();
     const hold = gate();
-    f.save.mockImplementation(async () => { await hold.promise; return { artifact_path: "report.md", latest_status: "saved" }; });
+    f.save.mockImplementation(async () => { await hold.promise; return { artifact_path: ".agent-postmortem/reports/test.md" }; });
     f.controller.request("", f.context);
     f.deliver();
     f.respond("raw reflection");
@@ -84,6 +85,9 @@ describe("controller failure and ownership boundaries", () => {
     await Promise.all([settled, shutdown]);
     expect(f.save).toHaveBeenCalledTimes(1);
     expect(f.entries).toHaveLength(1);
+    expect(f.ctx.ui.notify).toHaveBeenCalledWith(
+      "Postmortem saved: " + path.resolve(f.ctx.cwd, ".agent-postmortem/reports/test.md"), "info",
+    );
   });
 
   it("keeps the report artifact and tools when session persistence throws", async () => {

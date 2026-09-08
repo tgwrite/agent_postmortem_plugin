@@ -34,7 +34,7 @@ describe("postmortem in the real Pi agent loop", () => {
     expect(record.response_entry_id).toBeTruthy();
     const artifact = await readFile(path.join(h.cwd, record.artifact_path!), "utf8");
     expect(artifact.split("---\n\n")[1]).toBe(report);
-    expect(await readFile(path.join(h.cwd, ".agent-postmortem/latest.md"), "utf8")).toBe(artifact);
+    expect(await readdir(path.join(h.cwd, ".agent-postmortem"))).toEqual(["reports"]);
     const loaded = SessionManager.open(h.session.sessionFile!);
     expect(loaded.getEntries().filter((entry) => entry.type === "custom" && entry.customType === ENTRY_TYPE)).toHaveLength(1);
     expect(JSON.stringify(loaded.buildSessionContext().messages)).not.toContain('"artifact_status"');

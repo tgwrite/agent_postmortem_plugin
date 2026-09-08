@@ -1,18 +1,32 @@
 {
   "name": "agent-postmortem-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Manual same-session, tool-free LLM postmortems for Pi",
-  "keywords": ["pi-package"],
-  "engines": { "node": ">=22.19.0" },
-  "files": ["src", "README.md", "doc"],
-  "pi": { "extensions": ["./src/index.ts"] },
+  "keywords": [
+    "pi-package"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "doc"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
   "scripts": {
     "check": "tsc --noEmit",
     "test": "vitest run"
   },
-  "peerDependencies": { "@earendil-works/pi-coding-agent": ">=0.85.1 <0.86.0" },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.85.1 <0.86.0"
+  },
   "devDependencies": {
     "@earendil-works/pi-ai": "0.85.1",
     "@earendil-works/pi-coding-agent": "0.85.1",
