@@ -6,6 +6,7 @@ import { assistantText } from "../message.js";
 import { errorText } from "../types.js";
 import { bindCheckpoint } from "../compaction/binding.js";
 import { writeCheckpointArtifact } from "./artifact.js";
+import { checkpointReasoningEffort } from "./reasoning.js";
 import { buildCheckpointInput } from "./input.js";
 import { CheckpointError, completeSidecar } from "./sidecar.js";
 import { CHECKPOINT_SCHEMA, CHECKPOINT_TYPE, DEFAULT_CHECKPOINT_CONFIG, type CheckpointConfig, type CheckpointRecord } from "./types.js";
@@ -39,6 +40,7 @@ export class CheckpointController {
     // event, abandon its pending record rather than bind it to a later compact.
     if (this.pending) this.close(ctx, "ABANDONED", "CHECKPOINT_SUPERSEDED");
     const config = this.config();
+    const thinkingLevel = this.pi.getThinkingLevel();
     const start = Date.now();
     const record: CheckpointRecord = {
       schema_version: CHECKPOINT_SCHEMA, checkpoint_id: randomUUID(),
@@ -48,6 +50,8 @@ export class CheckpointController {
       reflection_status: "skipped", first_kept_entry_id: event.preparation.firstKeptEntryId,
       tokens_before: event.preparation.tokensBefore, prepared_tokens_before: event.preparation.tokensBefore,
       model: ctx.model ? { provider: ctx.model.provider, id: ctx.model.id } : undefined,
+      session_thinking_level: thinkingLevel,
+      reasoning_effort: checkpointReasoningEffort(ctx.model, thinkingLevel),
       report: "", duration_ms: 0, artifact_status: "not_written",
     };
     const pending: Pending = { record, phase: "REFLECTING", abort: new AbortController(),
@@ -63,7 +67,7 @@ export class CheckpointController {
       const input = buildCheckpointInput(event.preparation, config);
       record.input = input.metadata;
       if (!input.metadata.segment_messages) { record.error_code = "EMPTY_SEGMENT"; return; }
-      const response = await completeSidecar(ctx, input.text, record.checkpoint_id, signal, config);
+      const response = await completeSidecar(ctx, input.text, record.checkpoint_id, signal, config, thinkingLevel);
       if (this.pending !== pending) return;
       if (!Array.isArray(response.content) || response.content.some((block) => block.type === "text" && typeof block.text !== "string")) {
         throw new CheckpointError("PARSE_FAILURE");

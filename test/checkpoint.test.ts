@@ -14,7 +14,7 @@ function fixture(config: Partial<CheckpointConfig> = {}) {
   const records: CheckpointRecord[] = [];
   const pi = {
     appendEntry: vi.fn((_type: string, record: CheckpointRecord) => records.push(record)),
-    sendMessage: vi.fn(), setActiveTools: vi.fn(),
+    sendMessage: vi.fn(), setActiveTools: vi.fn(), getThinkingLevel: vi.fn(() => "off" as const),
   };
   const ctx = {
     cwd: process.cwd(), sessionManager: manager, model: MODEL, modelRegistry: { complete },

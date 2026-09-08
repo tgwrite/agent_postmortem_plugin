@@ -76,8 +76,10 @@ export async function createHarness(options: {
   retry?: boolean;
   compaction?: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
   tools?: string[];
+  model?: Model<"openai-completions">;
   setup?: (cwd: string) => Promise<void>;
 } = {}) {
+  const model = options.model ?? MODEL;
   const cwd = await mkdtemp(path.join(tmpdir(), "agent-postmortem-test-"));
   const agentDir = path.join(cwd, "agent");
   await options.setup?.(cwd);
@@ -95,21 +97,21 @@ export async function createHarness(options: {
   await resourceLoader.reload();
   expect(resourceLoader.getExtensions().errors).toEqual([]);
   const requests: Context[] = [];
-  const requestOptions: { sessionId?: string; cacheRetention?: string; maxTokens?: number }[] = [];
+  const requestOptions: { sessionId?: string; cacheRetention?: string; maxTokens?: number; reasoningEffort?: unknown }[] = [];
   let respond: (ctx: Context, signal?: AbortSignal) => AssistantMessageEventStream =
     () => streamReply(reply("# Task Postmortem\n\nA supported observation."));
-  const provider: Provider = {
+  const provider: Provider<"openai-completions"> = {
     id: MODEL.provider, name: "Deterministic postmortem provider",
     auth: { apiKey: { name: "test", resolve: async () => ({ auth: {} }) } },
-    getModels: () => [MODEL],
-    stream: (_model, ctx, opts) => { requests.push(JSON.parse(JSON.stringify(ctx)) as Context); requestOptions.push({ sessionId: opts?.sessionId, cacheRetention: opts?.cacheRetention, maxTokens: opts?.maxTokens }); return respond(ctx, opts?.signal); },
+    getModels: () => [model],
+    stream: (_model, ctx, opts) => { requests.push(JSON.parse(JSON.stringify(ctx)) as Context); requestOptions.push({ sessionId: opts?.sessionId, cacheRetention: opts?.cacheRetention, maxTokens: opts?.maxTokens, reasoningEffort: opts?.reasoningEffort }); return respond(ctx, opts?.signal); },
     streamSimple: (_model, ctx, opts) => { requests.push(JSON.parse(JSON.stringify(ctx)) as Context); requestOptions.push({ sessionId: opts?.sessionId, cacheRetention: opts?.cacheRetention, maxTokens: opts?.maxTokens }); return respond(ctx, opts?.signal); },
   };
   const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), refreshOnCreate: false });
   modelRuntime.registerNativeProvider(provider);
   const sessionManager = SessionManager.create(cwd, path.join(cwd, "sessions"));
   const { session } = await createAgentSession({
-    cwd, agentDir, modelRuntime, model: MODEL, thinkingLevel: "off",
+    cwd, agentDir, modelRuntime, model, thinkingLevel: "off",
     resourceLoader, sessionManager, settingsManager, tools: options.tools ?? (options.paths?.length ? undefined : ["read", "write"]),
   });
   await session.bindExtensions({});

@@ -6,7 +6,7 @@ import { SessionManager, type ExtensionContext, type ExtensionAPI } from "@earen
 import { afterEach, describe, expect, it } from "vitest";
 import { CHECKPOINT_SYSTEM_PROMPT } from "../src/checkpoint/prompt.js";
 import { CHECKPOINT_TYPE, type CheckpointRecord } from "../src/checkpoint/types.js";
-import { createHarness, gate, reply, streamReply, type Harness } from "./harness.js";
+import { createHarness, gate, MODEL, reply, streamReply, type Harness } from "./harness.js";
 
 const fixtures: Harness[] = [];
 afterEach(async () => { for (const h of fixtures.splice(0)) await h.close(); });
@@ -231,5 +231,22 @@ describe("JIT sidecar with real Pi compaction", () => {
     expect((await boundCheckpoints(ctx)).records.map((record) => record.report)).toEqual(["RESTORED_STAGE"]);
     restored.branch(leaf);
     expect((await boundCheckpoints(ctx)).records).toEqual([]);
+  });
+
+  it("reads the current Session thinking setting on every compaction and records it", async () => {
+    const h = await fixture({ model: { ...MODEL, reasoning: true, thinkingLevelMap: { max: "max" } } });
+    let summaries = 0;
+    h.respond((ctx) => streamReply(reply(isSidecar(ctx) ? "SESSION_THINKING_CHECKPOINT" : "SUMMARY_" + ++summaries)));
+    h.session.setThinkingLevel("high");
+    await seed(h);
+    await h.session.compact();
+    expect(h.requestOptions[h.requests.findIndex(isSidecar)].reasoningEffort).toBe("high");
+    expect(checkpoints(h)[0]).toMatchObject({ session_thinking_level: "high", reasoning_effort: "high", reflection_status: "completed" });
+    h.session.setThinkingLevel("max");
+    await seed(h);
+    await h.session.compact();
+    expect(h.requestOptions[h.requests.findLastIndex(isSidecar)].reasoningEffort).toBe("max");
+    expect(checkpoints(h)[1]).toMatchObject({ session_thinking_level: "max", reasoning_effort: "max", reflection_status: "completed" });
+    expect(h.session.thinkingLevel).toBe("max");
   });
 });

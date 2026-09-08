@@ -1,4 +1,4 @@
-import type { Usage } from "@earendil-works/pi-ai";
+import type { ModelThinkingLevel, ThinkingLevel, Usage } from "@earendil-works/pi-ai";
 import type { SessionBeforeCompactEvent } from "@earendil-works/pi-coding-agent";
 
 export const CHECKPOINT_TYPE = "agent-postmortem-checkpoint";
@@ -24,6 +24,8 @@ export interface CheckpointRecord {
   tokens_before: number;
   prepared_tokens_before: number;
   model?: { provider: string; id: string };
+  session_thinking_level: ModelThinkingLevel;
+  reasoning_effort?: ThinkingLevel;
   duration_ms: number;
   usage?: Usage;
   input?: { segment_messages: number; serialized_chars: number; supplied_chars: number; truncated: boolean };

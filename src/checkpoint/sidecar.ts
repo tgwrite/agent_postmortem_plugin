@@ -1,5 +1,6 @@
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { checkpointReasoningEffort } from "./reasoning.js";
 import { CHECKPOINT_SYSTEM_PROMPT } from "./prompt.js";
 import type { CheckpointConfig } from "./types.js";
 
@@ -12,6 +13,7 @@ export class CheckpointError extends Error {
 // aborted. Late results are ignored and can never alter a completed checkpoint.
 export async function completeSidecar(
   ctx: ExtensionContext, text: string, sessionId: string, signal: AbortSignal, config: CheckpointConfig,
+  thinkingLevel: ModelThinkingLevel,
 ): Promise<AssistantMessage> {
   if (!ctx.model) throw new CheckpointError("NO_ACTIVE_MODEL");
   const timeout = new AbortController();
@@ -31,6 +33,7 @@ export async function completeSidecar(
       tools: [],
     }, {
       maxTokens: Math.min(config.maxTokens, ctx.model.maxTokens),
+      reasoningEffort: checkpointReasoningEffort(ctx.model, thinkingLevel),
       signal: combined, cacheRetention: "none", sessionId,
     });
     return await Promise.race([response, aborted]);
