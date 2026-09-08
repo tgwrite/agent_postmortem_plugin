@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { ExtensionAPI, ExtensionContext, MessageEndEvent, TurnEndEvent } from "@earendil-works/pi-coding-agent";
+import type { ContextEvent, ExtensionAPI, ExtensionContext, MessageEndEvent, TurnEndEvent } from "@earendil-works/pi-coding-agent";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
+import { boundCheckpoints, checkpointContext } from "./checkpoint/aggregation.js";
 import { writeArtifact } from "./artifact.js";
 import { assistantText, isRequestMessage, responseError } from "./message.js";
 import { POSTMORTEM_PROMPT } from "./prompt.js";
@@ -22,6 +23,29 @@ export class PostmortemController {
   constructor(pi: ExtensionAPI, saveArtifact = writeArtifact) {
     this.pi = pi;
     this.saveArtifact = saveArtifact;
+  }
+
+  get isReflecting(): boolean {
+    return this.state.phase === "RUNNING" || this.state.phase === "CAPTURED";
+  }
+
+  async context(event: ContextEvent, ctx: ExtensionContext): Promise<{ messages: ContextEvent["messages"] } | undefined> {
+    if (this.state.phase !== "RUNNING" || !this.requestSeen || !this.record) return;
+    const record = this.record;
+    try {
+      const { records: checkpoints, unavailable } = await boundCheckpoints(ctx);
+      if (this.record !== record || this.state.phase !== "RUNNING") return;
+      record.checkpoint_ids = checkpoints.map((checkpoint) => checkpoint.checkpoint_id);
+      record.unavailable_checkpoint_ids = unavailable;
+      const content = checkpointContext(checkpoints, unavailable);
+      if (!content) return;
+      // Ephemeral provider context only: no checkpoint material is added to the
+      // session tree, ordinary messages, follow-ups, or compaction preparation.
+      return { messages: [...event.messages, { role: "user", content, timestamp: Date.now() }] };
+    } catch (error) {
+      this.notify(ctx, "Checkpoint aggregation unavailable: " + errorText(error), "warning");
+      return;
+    }
   }
 
   request(args: string, ctx: ExtensionContext): void {

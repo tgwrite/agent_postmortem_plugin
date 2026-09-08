@@ -32,6 +32,8 @@ export interface PostmortemRecord {
   assistant_stop_reason?: string;
   response_entry_id?: string;
   compactions_during_postmortem: number;
+  checkpoint_ids?: string[];
+  unavailable_checkpoint_ids?: string[];
   artifact_status: "pending" | "saved" | "failed";
   artifact_path?: string;
   artifact_error?: string;

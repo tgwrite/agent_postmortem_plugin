@@ -74,13 +74,15 @@ export async function createHarness(options: {
   postmortemFirst?: boolean;
   includePostmortem?: boolean;
   retry?: boolean;
+  compaction?: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
+  tools?: string[];
   setup?: (cwd: string) => Promise<void>;
 } = {}) {
   const cwd = await mkdtemp(path.join(tmpdir(), "agent-postmortem-test-"));
   const agentDir = path.join(cwd, "agent");
   await options.setup?.(cwd);
   const settingsManager = SettingsManager.inMemory({
-    compaction: { enabled: false },
+    compaction: options.compaction ?? { enabled: false },
     retry: { enabled: options.retry ?? false, maxRetries: 1, baseDelayMs: 1 },
   });
   const resourceLoader = new DefaultResourceLoader({
@@ -93,27 +95,28 @@ export async function createHarness(options: {
   await resourceLoader.reload();
   expect(resourceLoader.getExtensions().errors).toEqual([]);
   const requests: Context[] = [];
+  const requestOptions: { sessionId?: string; cacheRetention?: string; maxTokens?: number }[] = [];
   let respond: (ctx: Context, signal?: AbortSignal) => AssistantMessageEventStream =
     () => streamReply(reply("# Task Postmortem\n\nA supported observation."));
   const provider: Provider = {
     id: MODEL.provider, name: "Deterministic postmortem provider",
     auth: { apiKey: { name: "test", resolve: async () => ({ auth: {} }) } },
     getModels: () => [MODEL],
-    stream: (_model, ctx, opts) => { requests.push(JSON.parse(JSON.stringify(ctx)) as Context); return respond(ctx, opts?.signal); },
-    streamSimple: (_model, ctx, opts) => { requests.push(JSON.parse(JSON.stringify(ctx)) as Context); return respond(ctx, opts?.signal); },
+    stream: (_model, ctx, opts) => { requests.push(JSON.parse(JSON.stringify(ctx)) as Context); requestOptions.push({ sessionId: opts?.sessionId, cacheRetention: opts?.cacheRetention, maxTokens: opts?.maxTokens }); return respond(ctx, opts?.signal); },
+    streamSimple: (_model, ctx, opts) => { requests.push(JSON.parse(JSON.stringify(ctx)) as Context); requestOptions.push({ sessionId: opts?.sessionId, cacheRetention: opts?.cacheRetention, maxTokens: opts?.maxTokens }); return respond(ctx, opts?.signal); },
   };
   const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), refreshOnCreate: false });
   modelRuntime.registerNativeProvider(provider);
   const sessionManager = SessionManager.create(cwd, path.join(cwd, "sessions"));
   const { session } = await createAgentSession({
     cwd, agentDir, modelRuntime, model: MODEL, thinkingLevel: "off",
-    resourceLoader, sessionManager, settingsManager, tools: options.paths?.length ? undefined : ["read", "write"],
+    resourceLoader, sessionManager, settingsManager, tools: options.tools ?? (options.paths?.length ? undefined : ["read", "write"]),
   });
   await session.bindExtensions({});
   const records = () => sessionManager.getEntries().flatMap((entry) =>
     entry.type === "custom" && entry.customType === ENTRY_TYPE ? [entry.data as PostmortemRecord] : []);
   return {
-    cwd, session, sessionManager, requests, records,
+    cwd, session, sessionManager, requests, requestOptions, records,
     respond(fn: typeof respond) { respond = fn; },
     async waitForReports(count = 1) {
       await expect.poll(() => records().length, { timeout: 5000 }).toBe(count);
