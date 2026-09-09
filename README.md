@@ -83,6 +83,8 @@ After installation, for example:
 pi --postmortem-checkpoint-timeout-ms 180000 --postmortem-checkpoint-max-tokens 8192
 ```
 
+**Upgrading an existing session:** Pi 0.85.1 preserves extension flag values across `/reload`, including old defaults. Restart Pi and resume the same session to adopt changed budget defaults. Remove old budget overrides from the launch command, or explicitly pass `--postmortem-checkpoint-max-tokens 8192 --postmortem-checkpoint-timeout-ms 180000`. Other extension loading options can be kept. A reload alone does not replace a retained 2048/45000 value.
+
 Invalid numeric values fall back to defaults. The timeout covers the checkpoint model request, not the entire compaction. Checkpoint calls are not retried.
 
 ## Data and limitations

@@ -83,6 +83,8 @@ npm ci --ignore-scripts
 pi --postmortem-checkpoint-timeout-ms 180000 --postmortem-checkpoint-max-tokens 8192
 ```
 
+**已有会话升级：**Pi 0.85.1 的 `/reload` 会保留扩展参数值，包括旧默认值。要采用新的预算默认值，请重启 Pi 并恢复同一会话；移除启动命令中的旧预算覆盖，或显式传入 `--postmortem-checkpoint-max-tokens 8192 --postmortem-checkpoint-timeout-ms 180000`。其他扩展加载选项可以保留。单独 `/reload` 不会替换已保留的 2048/45000。
+
 无效数值回退到默认值。超时限制阶段模型请求，不是整次压缩耗时。阶段模型调用不会重试。
 
 ## 数据与限制

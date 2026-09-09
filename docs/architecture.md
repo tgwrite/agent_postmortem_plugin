@@ -27,6 +27,8 @@ Checkpoint errors do not replace or cancel compaction. Existing cancellation sig
 
 For supported OpenAI-compatible Completions and Responses reasoning APIs, the plugin reads `pi.getThinkingLevel()` at each trigger and forwards it as `reasoningEffort`, retaining the selected level rather than selecting a lower default. Metadata records `session_thinking_level` and `reasoning_effort`. This adapter does not cover every provider API.
 
+Pi 0.85.1 preserves the prior runtime flag map during reload, including values originally populated from defaults. Upgrading a live session therefore requires a process restart and resume to adopt new budget defaults. The plugin does not silently overwrite a retained value because it cannot distinguish an old default from an explicit user override.
+
 ## Final review
 
 `/postmortem` takes no arguments. If the task is running, its request waits for `agent_settled`. Pending duplicate requests are deduplicated. The final controller snapshots active tools, disables tool use during reflection, associates the response with its request, and restores the prior tool selection when the review finishes or is interrupted.
