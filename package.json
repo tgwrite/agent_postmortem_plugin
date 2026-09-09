@@ -5,7 +5,10 @@
   "type": "module",
   "description": "JIT pre-compaction sidecar reflections and manual final postmortems for Pi",
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "postmortem",
+    "reflection",
+    "ai-agent"
   ],
   "engines": {
     "node": ">=22.19.0"
@@ -13,7 +16,12 @@
   "files": [
     "src",
     "README.md",
-    "doc"
+    "README.zh-CN.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "docs"
   ],
   "pi": {
     "extensions": [
@@ -33,5 +41,15 @@
     "@types/node": "24.3.0",
     "typescript": "5.9.3",
     "vitest": "4.1.9"
+  },
+  "license": "MIT",
+  "author": "tgwrite",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tgwrite/agent_postmortem_plugin.git"
+  },
+  "homepage": "https://github.com/tgwrite/agent_postmortem_plugin#readme",
+  "bugs": {
+    "url": "https://github.com/tgwrite/agent_postmortem_plugin/issues"
   }
 }

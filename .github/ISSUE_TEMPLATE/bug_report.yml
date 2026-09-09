@@ -1,0 +1,32 @@
+name: Bug report
+description: Report a reproducible problem with the plugin.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: "English and Chinese are welcome. Remove credentials, private project details, workstation paths, and task data from examples. For vulnerabilities, see SECURITY.md."
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Plugin version or commit, Pi version, Node.js version, OS, and model/provider if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps and sanitized input; avoid uploading a full session.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or report excerpt
+      description: Optional. Include only what is needed to understand the issue.
