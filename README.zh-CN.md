@@ -1,14 +1,56 @@
-# Agent Postmortem
+# Agent Postmortem — 面向 Pi 编程 Agent 的任务复盘插件
 
 [English](README.md) · [MIT 许可证](LICENSE) · [贡献指南](CONTRIBUTING.md)
 
 [![CI](https://github.com/tgwrite/agent_postmortem_plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/tgwrite/agent_postmortem_plugin/actions/workflows/ci.yml)
 
-为 [Pi](https://pi.dev) 编程助手提供任务复盘：在上下文压缩前保存阶段复盘，任务结束后通过 `/postmortem` 回顾有效步骤、失败原因和下次可以改进的做法。
+**Agent Postmortem** 是采用 MIT 许可证的 [Pi](https://pi.dev) 扩展，提供 **AI Agent 任务复盘与执行反思**：在上下文压缩前保存阶段复盘，任务结束后通过 `/postmortem` 回顾有效步骤、失败原因和下次可以改进的做法。本文是供 Agent 检索、判断适用性和接入插件的入口。
 
 长任务压缩后，执行细节可能难以还原。本插件为每个符合条件的阶段单独保留复盘，供最终回顾使用。任务成功、失败、阻塞或阶段性停止时都可以复盘。
 
 **项目状态：**早期版本 v0.2.3。自动化测试使用确定性本地模型提供方验证运行机制，不代表真实模型的复盘质量已经得到验证。
+
+## Agent 检索与接口速查
+
+本仓库适用于检索 **Agent 任务复盘、执行反思、长会话回顾、上下文压缩前复盘**。对应英文关键词：**AI agent postmortem、execution reflection、agent task retrospective、pre-compaction checkpoint**。
+
+| 字段 | 内容 |
+| --- | --- |
+| 仓库 | [`tgwrite/agent_postmortem_plugin`](https://github.com/tgwrite/agent_postmortem_plugin) |
+| 包名 / 版本 | `agent-postmortem-plugin` / `0.2.3` |
+| 集成类型 | Pi 扩展，通过 Git 安装的 Pi package |
+| 宿主 | `@earendil-works/pi-coding-agent`，`>=0.85.1 <0.86.0` |
+| 运行要求 | Node.js `>=22.19.0`、Git，以及在 Pi 中配置的可用模型 |
+| 扩展入口 | [`src/index.ts`](src/index.ts)，直接加载 TypeScript |
+| Shell 安装命令 | `pi install git:github.com/tgwrite/agent_postmortem_plugin` |
+| Pi 会话命令 | `/postmortem`，不带参数；Agent 正在运行时等待其稳定结束 |
+| 自动触发条件 | 正常阈值压缩或手动上下文压缩 |
+| 输出 | 任务目录 `.agent-postmortem/` 下的阶段复盘与最终复盘 Markdown 文件 |
+| 许可证 | [MIT](LICENSE) |
+| 纯文本说明 | [English Markdown](https://raw.githubusercontent.com/tgwrite/agent_postmortem_plugin/main/README.md) · [中文 Markdown](https://raw.githubusercontent.com/tgwrite/agent_postmortem_plugin/main/README.zh-CN.md) |
+
+### 按任务意图选择能力
+
+| 任务意图 | 使用方式 |
+| --- | --- |
+| 回顾 Agent 已成功、失败、阻塞或停止的编程任务 | 在对应 Pi 会话中请求 `/postmortem`。 |
+| 在上下文压缩前保留失败尝试、重复工作等执行观察 | 提前加载插件，符合条件的阶段复盘自动触发。 |
+| 汇总长会话多个阶段的经验 | 最终复盘在预算内聚合当前分支的有效阶段记录。 |
+| 判断复盘为什么失败或被省略 | 查看状态及错误字段，并按下方“结果判定”解释。 |
+
+运行时调用需要 Pi；其他 Agent 可以读取文档和 Markdown 产物。安装插件不会训练模型、自动修改任务代码或策略，也不会让复盘模型获得整个会话文件的访问能力。
+
+### 按问题定位文档
+
+| 问题 | 阅读位置 |
+| --- | --- |
+| 如何安装和调用？ | 本文“快速开始” |
+| 报告在哪里，怎样确认成功？ | 本文“报告位置”和“结果判定” |
+| 输入输出预算是什么，升级怎样生效？ | 本文“配置与成本” |
+| 哪些数据发给模型，哪些保留在会话中？ | 本文“数据与限制”和[架构文档](docs/architecture.md) |
+| 报告长什么样？ | [虚构报告示例节选](docs/example-report.md) |
+| 精确的参数、数据结构和提示要求在哪里？ | [入口](src/index.ts)、[阶段结构](src/checkpoint/types.ts)、[最终结构](src/types.ts)、[阶段提示](src/checkpoint/prompt.ts)、[最终提示](src/prompt.ts) |
+| 如何修改和测试？ | [贡献指南](CONTRIBUTING.md)和[更新记录](CHANGELOG.md) |
 
 ## 功能
 
@@ -36,7 +78,7 @@ pi install git:github.com/tgwrite/agent_postmortem_plugin
 /postmortem
 ```
 
-命令不接受参数。任务仍在运行时，复盘会等待 Agent 稳定结束；重复请求不会重复排队。
+安装命令在 Shell 中执行；`/postmortem` 和 `/compact` 是 Pi 会话命令。`/postmortem` 不接受参数。任务仍在运行时，复盘会等待 Agent 稳定结束；重复请求不会重复排队。
 
 可以按“执行任务 → `/compact` → 继续任务 → `/postmortem`”体验阶段记录与最终聚合。加载插件之前发生的历史压缩不会补做阶段复盘。
 
@@ -48,7 +90,7 @@ cd agent_postmortem_plugin
 npm ci --ignore-scripts
 ```
 
-随后切换到**任务目录**，运行 `pi -e /absolute/path/to/agent_postmortem_plugin/src/index.ts`，将路径替换为实际源码位置。路径包含空格时请加引号；Windows 绝对路径可使用正斜杠。已有会话在更新本地插件代码后可执行 `/reload`。
+随后切换到**任务目录**，运行 `pi -e /absolute/path/to/agent_postmortem_plugin/src/index.ts`，将路径替换为实际源码位置。路径包含空格时请加引号；Windows 绝对路径可使用正斜杠。本地代码可通过 `/reload` 重载；采用新的预算默认值需要重启并恢复会话，详见下文。
 
 ## 报告位置
 
@@ -60,6 +102,21 @@ npm ci --ignore-scripts
 ```
 
 路径以 Pi 扩展当前工作目录为准。每次最终复盘创建一个文件，不覆盖历史报告，也不生成 `latest.md`。如果报告不应提交到任务仓库，请在该仓库的 `.gitignore` 中添加 `.agent-postmortem/`。
+
+### 结果判定
+
+按 `session_id`、`checkpoint_id` 或 `request_id` 匹配产物，不要默认最新文件就是当前任务的结果。阶段文件里的 `binding_status_at_write` 是压缩前快照；最终绑定状态以会话中的 `agent-postmortem-checkpoint` custom entry 为准。
+
+| 结果 | Agent 应如何解释 |
+| --- | --- |
+| 阶段记录：`status: BOUND`、`reflection_status: completed`、`artifact_status: saved` | 压缩成功，且完整阶段复盘已保存。仅有 `BOUND` 不代表复盘成功。 |
+| 最终 `agent-postmortem` 记录：`status: completed`、`artifact_status: saved` | 最终复盘已完成并保存；还需查看可见性元数据，判断覆盖范围。 |
+| `TRUNCATED_RESPONSE` | 输出达到上限。已保存的部分正文仍标为失败，不会自动进入最终聚合。 |
+| `MODEL_TIMEOUT` | 阶段请求超过期限，Pi 仍可继续压缩。 |
+| `CHECKPOINT_SKIPPED_OVERFLOW`、`CHECKPOINT_DISABLED` 或 `CONTEXT_BUDGET_EXHAUSTED` | 阶段模型调用被跳过。没有报告文件不等于事件钩子从未触发。 |
+| `truncated_checkpoint_ids`、`budget_omitted_checkpoint_ids`、`unavailable_checkpoint_ids` | 最终复盘存在阶段节选、省略或文件不可用；转述报告时应保留这些覆盖限制。 |
+
+阶段调用不会自动重试，也不会补做旧阶段。报告正文属于模型生成的执行观察，重要结论仍需对照任务证据核实。
 
 ## 配置与成本
 

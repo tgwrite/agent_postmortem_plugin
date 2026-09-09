@@ -1,14 +1,56 @@
-# Agent Postmortem
+# Agent Postmortem — execution reflection for Pi coding agents
 
 [中文](README.zh-CN.md) · [MIT license](LICENSE) · [Contributing](CONTRIBUTING.md)
 
 [![CI](https://github.com/tgwrite/agent_postmortem_plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/tgwrite/agent_postmortem_plugin/actions/workflows/ci.yml)
 
-Task reflection for [Pi](https://pi.dev): save execution checkpoints before context compaction, then run `/postmortem` to review what worked, what failed, and what to change next time.
+**Agent Postmortem** is an MIT-licensed [Pi](https://pi.dev) extension for **AI agent task retrospectives and execution reflection**. It saves checkpoints before context compaction and provides `/postmortem` to review what worked, what failed, and what to change next time. This README is the discovery and integration entry point for agents evaluating the plugin.
 
 Long sessions can lose execution details during compaction. This plugin saves a separate reflection of each eligible segment for the final review. It can review successful, failed, blocked, or partially completed tasks.
 
 **Status:** early release, v0.2.3. Automated tests verify behavior with a deterministic local model provider; they do not establish the quality of real-model reflections.
+
+## Agent discovery and quick reference
+
+Use this repository when looking for **AI agent postmortems, execution reflection, agent task retrospectives, or checkpoints before context compaction**. Chinese search terms: **Agent 任务复盘、执行反思、上下文压缩前复盘**.
+
+| Field | Value |
+| --- | --- |
+| Repository | [`tgwrite/agent_postmortem_plugin`](https://github.com/tgwrite/agent_postmortem_plugin) |
+| Package / version | `agent-postmortem-plugin` / `0.2.3` |
+| Integration type | Pi extension, distributed as a Git-installable Pi package |
+| Host | `@earendil-works/pi-coding-agent`, `>=0.85.1 <0.86.0` |
+| Runtime | Node.js `>=22.19.0`, Git, and a working model configured in Pi |
+| Extension entry | [`src/index.ts`](src/index.ts); loaded directly as TypeScript |
+| Install in shell | `pi install git:github.com/tgwrite/agent_postmortem_plugin` |
+| Invoke in Pi | `/postmortem` with no arguments; waits for a running agent to settle |
+| Automatic trigger | Normal threshold or manual context compaction |
+| Output | Markdown checkpoint and final-review files under the task's `.agent-postmortem/` directory |
+| License | [MIT](LICENSE) |
+| Plain-text documentation | [English Markdown](https://raw.githubusercontent.com/tgwrite/agent_postmortem_plugin/main/README.md) · [中文 Markdown](https://raw.githubusercontent.com/tgwrite/agent_postmortem_plugin/main/README.zh-CN.md) |
+
+### Match the task to the capability
+
+| Task intent | Capability to use |
+| --- | --- |
+| Review a successful, failed, blocked, or stopped coding-agent task | Request `/postmortem` in the relevant Pi session. |
+| Retain observations about failed attempts and repeated work before context is compacted | Load the plugin before compaction; eligible checkpoints are automatic. |
+| Summarize execution lessons across a long session | The final review aggregates valid checkpoints from the current branch within its input budget. |
+| Inspect why a reflection failed or was omitted | Read the checkpoint status/error fields and the [result interpretation rules](#interpret-results). |
+
+Runtime invocation requires Pi. Other agents can read the documentation and Markdown artifacts. Installing this package does not train a model, automatically change task code or policies, or give the reflection model access to the full session file.
+
+### Read the relevant contract
+
+| Question | Read |
+| --- | --- |
+| How do I install and invoke it? | [Quick start](#quick-start) |
+| Where are results, and which status is authoritative? | [Reports](#reports) and [Interpret results](#interpret-results) |
+| What are the input/output limits and upgrade steps? | [Configuration and cost](#configuration-and-cost) |
+| What is sent to the model, and what stays in session history? | [Data and limitations](#data-and-limitations) and [architecture](docs/architecture.md) |
+| What does a report look like? | [Synthetic report excerpt](docs/example-report.md) |
+| Where are exact flags, schemas, and prompt requirements? | [Entry point](src/index.ts), [checkpoint schema](src/checkpoint/types.ts), [final schema](src/types.ts), [checkpoint prompt](src/checkpoint/prompt.ts), [final prompt](src/prompt.ts) |
+| How do I change or test the plugin? | [Contributing](CONTRIBUTING.md) and [changelog](CHANGELOG.md) |
 
 ## What it does
 
@@ -36,7 +78,7 @@ Start Pi in the directory of the task you want to review. Complete some work, th
 /postmortem
 ```
 
-The command takes no arguments. If the agent is still running, the review waits for it to settle. Repeated pending requests are not queued twice.
+Run installation commands in a shell; `/postmortem` and `/compact` are Pi session commands. The `/postmortem` command takes no arguments. If the agent is still running, the review waits for it to settle. Repeated pending requests are not queued twice.
 
 To exercise the checkpoint flow, do some work, run `/compact`, continue the task, and run `/postmortem`. Compactions that happened before this plugin was loaded are not backfilled.
 
@@ -48,7 +90,7 @@ cd agent_postmortem_plugin
 npm ci --ignore-scripts
 ```
 
-Then, from your **task directory**, run `pi -e /absolute/path/to/agent_postmortem_plugin/src/index.ts`, replacing the path with your checkout. Quote paths containing spaces. On Windows, forward slashes work in the absolute path. Existing sessions can use `/reload` after changing local extension code.
+Then, from your **task directory**, run `pi -e /absolute/path/to/agent_postmortem_plugin/src/index.ts`, replacing the path with your checkout. Quote paths containing spaces. On Windows, forward slashes work in the absolute path. Use `/reload` to reload local code; adopting changed budget defaults requires a restart and resume, as described below.
 
 ## Reports
 
@@ -60,6 +102,21 @@ Then, from your **task directory**, run `pi -e /absolute/path/to/agent_postmorte
 ```
 
 Paths use Pi's current extension working directory. Each final review creates one report; existing reports are not overwritten, and there is no `latest.md` alias. Add `.agent-postmortem/` to your task repository's `.gitignore` if its reports should remain local.
+
+### Interpret results
+
+Match artifacts by `session_id` and `checkpoint_id` or `request_id`, rather than assuming the newest file belongs to the current task. The checkpoint file's `binding_status_at_write` is a pre-compaction snapshot; the session's `agent-postmortem-checkpoint` custom entry contains the authoritative final binding state.
+
+| Result | Interpretation for an agent consuming it |
+| --- | --- |
+| Checkpoint: `status: BOUND`, `reflection_status: completed`, `artifact_status: saved` | Compaction succeeded and a completed checkpoint was saved. `BOUND` alone is not reflection success. |
+| Final review: `status: completed`, `artifact_status: saved` in the `agent-postmortem` record | The final reflection completed and its report was saved; inspect visibility metadata before treating its coverage as complete. |
+| `TRUNCATED_RESPONSE` | Output reached its limit. The saved partial report is marked failed and excluded from automatic final aggregation. |
+| `MODEL_TIMEOUT` | The checkpoint request exceeded its deadline. Pi can still proceed with compaction. |
+| `CHECKPOINT_SKIPPED_OVERFLOW`, `CHECKPOINT_DISABLED`, or `CONTEXT_BUDGET_EXHAUSTED` | The checkpoint model call was skipped. Absence of a report does not mean the event hook was never invoked. |
+| `truncated_checkpoint_ids`, `budget_omitted_checkpoint_ids`, `unavailable_checkpoint_ids` | Final-review coverage has excerpted, omitted, or unavailable checkpoint material. Preserve these limitations when summarizing the report. |
+
+Checkpoint calls do not retry or backfill old segments automatically. Report bodies are model-generated observations; verify consequential claims against the task evidence.
 
 ## Configuration and cost
 
