@@ -34,6 +34,9 @@ export interface PostmortemRecord {
   compactions_during_postmortem: number;
   checkpoint_ids?: string[];
   unavailable_checkpoint_ids?: string[];
+  truncated_checkpoint_ids?: string[];
+  budget_omitted_checkpoint_ids?: string[];
+  checkpoint_input_budget?: { token_limit: number; estimated_tokens: number; estimator: string };
   artifact_status: "pending" | "saved" | "failed";
   artifact_path?: string;
   artifact_error?: string;

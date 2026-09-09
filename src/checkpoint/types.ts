@@ -28,7 +28,11 @@ export interface CheckpointRecord {
   reasoning_effort?: ThinkingLevel;
   duration_ms: number;
   usage?: Usage;
-  input?: { segment_messages: number; serialized_chars: number; supplied_chars: number; truncated: boolean };
+  input?: {
+    segment_messages: number; serialized_chars: number; supplied_chars: number; truncated: boolean;
+    estimated_tokens?: number; token_limit?: number; fits_budget?: boolean;
+    max_output_tokens?: number; timeout_ms?: number; estimator?: string;
+  };
   report: string;
   report_sha256?: string;
   artifact_status: "not_written" | "saved" | "failed";
@@ -40,8 +44,9 @@ export interface CheckpointConfig {
   timeoutMs: number;
   maxTokens: number;
   maxInputChars: number;
+  maxInputTokens: number;
   previousSummaryChars: number;
 }
 export const DEFAULT_CHECKPOINT_CONFIG: CheckpointConfig = {
-  enabled: true, timeoutMs: 45000, maxTokens: 2048, maxInputChars: 120000, previousSummaryChars: 12000,
+  enabled: true, timeoutMs: 180000, maxTokens: 8192, maxInputTokens: 64000, maxInputChars: 120000, previousSummaryChars: 12000,
 };

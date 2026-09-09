@@ -1,3 +1,4 @@
+import { availableInputTokens, DEFAULT_FINAL_CHECKPOINT_TOKENS, estimateTextTokens } from "./budget.js";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ContextEvent, ExtensionAPI, ExtensionContext, MessageEndEvent, TurnEndEvent } from "@earendil-works/pi-coding-agent";
@@ -12,6 +13,7 @@ import { ENTRY_TYPE, REQUEST_TYPE, SCHEMA, errorText, type PostmortemRecord } fr
 export class PostmortemController {
   private readonly pi: ExtensionAPI;
   private readonly saveArtifact: typeof writeArtifact;
+  private readonly checkpointTokenLimit: () => number;
   private readonly state = new PostmortemState();
   private record?: PostmortemRecord;
   private previousTools?: string[];
@@ -20,9 +22,10 @@ export class PostmortemController {
   private timer?: ReturnType<typeof setTimeout>;
   private finalizing?: Promise<void>;
 
-  constructor(pi: ExtensionAPI, saveArtifact = writeArtifact) {
+  constructor(pi: ExtensionAPI, saveArtifact = writeArtifact, checkpointTokenLimit = () => DEFAULT_FINAL_CHECKPOINT_TOKENS) {
     this.pi = pi;
     this.saveArtifact = saveArtifact;
+    this.checkpointTokenLimit = checkpointTokenLimit;
   }
 
   get isReflecting(): boolean {
@@ -35,9 +38,20 @@ export class PostmortemController {
     try {
       const { records: checkpoints, unavailable } = await boundCheckpoints(ctx);
       if (this.record !== record || this.state.phase !== "RUNNING") return;
-      record.checkpoint_ids = checkpoints.map((checkpoint) => checkpoint.checkpoint_id);
+      const systemPrompt = typeof ctx.getSystemPrompt === "function" ? ctx.getSystemPrompt() : "";
+      const existingTokens = estimateTextTokens(JSON.stringify(event.messages)) + estimateTextTokens(systemPrompt);
+      const available = Math.max(0, availableInputTokens(ctx.model, ctx.model?.maxTokens ?? 8192, Number.MAX_SAFE_INTEGER) - existingTokens);
+      const tokenLimit = Math.min(this.checkpointTokenLimit(), available);
+      const budgeted = checkpointContext(checkpoints, unavailable, tokenLimit);
+      record.checkpoint_ids = budgeted.included;
       record.unavailable_checkpoint_ids = unavailable;
-      const content = checkpointContext(checkpoints, unavailable);
+      record.truncated_checkpoint_ids = budgeted.truncated;
+      record.budget_omitted_checkpoint_ids = budgeted.omitted;
+      record.checkpoint_input_budget = { token_limit: tokenLimit, estimated_tokens: budgeted.estimatedTokens, estimator: "utf8-bytes/2" };
+      if (budgeted.truncated.length || budgeted.omitted.length) {
+        this.notify(ctx, "Final review checkpoint budget: " + budgeted.truncated.length + " excerpted, " + budgeted.omitted.length + " omitted; visibility gaps recorded.", "warning");
+      }
+      const content = budgeted.content;
       if (!content) return;
       // Ephemeral provider context only: no checkpoint material is added to the
       // session tree, ordinary messages, follow-ups, or compaction preparation.

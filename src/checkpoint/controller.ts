@@ -64,9 +64,10 @@ export class CheckpointController {
       if (this.isFinalReflecting()) { record.error_code = "CHECKPOINT_SKIPPED_FINAL_POSTMORTEM"; return; }
       if (!ctx.model) { record.error_code = "NO_ACTIVE_MODEL"; return; }
       if (signal.aborted) { record.error_code = "USER_ABORT"; return; }
-      const input = buildCheckpointInput(event.preparation, config);
+      const input = buildCheckpointInput(event.preparation, config, ctx.model);
       record.input = input.metadata;
       if (!input.metadata.segment_messages) { record.error_code = "EMPTY_SEGMENT"; return; }
+      if (!input.metadata.fits_budget) { record.error_code = "CONTEXT_BUDGET_EXHAUSTED"; return; }
       const response = await completeSidecar(ctx, input.text, record.checkpoint_id, signal, config, thinkingLevel);
       if (this.pending !== pending) return;
       if (!Array.isArray(response.content) || response.content.some((block) => block.type === "text" && typeof block.text !== "string")) {

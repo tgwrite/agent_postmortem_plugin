@@ -55,7 +55,7 @@ describe("JIT sidecar with real Pi compaction", () => {
     expect(isSidecar(h.requests[0])).toBe(true);
     expect(h.requests[0].tools).toEqual([]);
     expect(h.requests[0].systemPrompt).toBe(CHECKPOINT_SYSTEM_PROMPT);
-    expect(h.requestOptions[0]).toMatchObject({ cacheRetention: "none", maxTokens: 2048 });
+    expect(h.requestOptions[0]).toMatchObject({ cacheRetention: "none", maxTokens: MODEL.maxTokens });
     expect(h.requestOptions[0].sessionId).not.toBe(h.session.sessionId);
     expect(JSON.stringify(h.requests[1])).not.toContain("SIDECAR_ONLY_SECRET_1");
     expect(JSON.stringify(h.requests[1])).not.toContain(CHECKPOINT_SYSTEM_PROMPT);
@@ -248,5 +248,56 @@ describe("JIT sidecar with real Pi compaction", () => {
     expect(h.requestOptions[h.requests.findLastIndex(isSidecar)].reasoningEffort).toBe("max");
     expect(checkpoints(h)[1]).toMatchObject({ session_thinking_level: "max", reasoning_effort: "max", reflection_status: "completed" });
     expect(h.session.thinkingLevel).toBe("max");
+  });
+
+  it("applies the long-task flags and records the effective provider budgets", async () => {
+    const h = await fixture({ model: { ...MODEL, maxTokens: 16384, reasoning: true } });
+    h.session.setThinkingLevel("high");
+    h.session.extensionRunner.setFlagValue("postmortem-checkpoint-timeout-ms", "240000");
+    h.session.extensionRunner.setFlagValue("postmortem-checkpoint-max-tokens", "12288");
+    h.session.extensionRunner.setFlagValue("postmortem-checkpoint-max-input-tokens", "8000");
+    await seed(h);
+    h.respond((ctx) => streamReply(reply(isSidecar(ctx) ? "BUDGETED_STAGE" : "SUMMARY")));
+    await h.session.compact();
+    expect(h.requestOptions[h.requests.findIndex(isSidecar)]).toMatchObject({ maxTokens: 12288, reasoningEffort: "high" });
+    expect(checkpoints(h)[0]).toMatchObject({ reflection_status: "completed", input: {
+      max_output_tokens: 12288, timeout_ms: 240000, token_limit: 8000, fits_budget: true,
+    } });
+  });
+
+  it("continues compaction without a sidecar call when the configured input cannot fit", async () => {
+    const h = await fixture();
+    h.session.extensionRunner.setFlagValue("postmortem-checkpoint-max-input-tokens", "1");
+    await seed(h);
+    h.respond(() => streamReply(reply("COMPACTION_CONTINUES")));
+    await h.session.compact();
+    expect(h.requests.some(isSidecar)).toBe(false);
+    expect(checkpoints(h)[0]).toMatchObject({ status: "BOUND", reflection_status: "skipped",
+      error_code: "CONTEXT_BUDGET_EXHAUSTED", artifact_status: "not_written" });
+  });
+
+  it("bounds final checkpoint context and records excerpts without changing the original artifact", async () => {
+    const h = await fixture();
+    h.session.extensionRunner.setFlagValue("postmortem-final-checkpoint-max-input-tokens", "1000");
+    await seed(h);
+    h.respond((ctx) => streamReply(reply(isSidecar(ctx) ?
+      "REPORT_START\n" + "Synthetic observation. ".repeat(4000) + "\nREPORT_END" : "SUMMARY")));
+    await h.session.compact();
+    const checkpoint = checkpoints(h)[0];
+    const file = path.join(h.cwd, checkpoint.artifact_path!);
+    const original = await readFile(file, "utf8");
+    h.respond(() => streamReply(reply("Final reflection with explicit visibility limits.")));
+    await h.session.prompt("/postmortem");
+    await h.waitForReports();
+    expect(h.records()[0]).toMatchObject({
+      checkpoint_ids: [checkpoint.checkpoint_id], truncated_checkpoint_ids: [checkpoint.checkpoint_id],
+      budget_omitted_checkpoint_ids: [], checkpoint_input_budget: { token_limit: 1000 },
+    });
+    expect(h.records()[0].checkpoint_input_budget!.estimated_tokens).toBeLessThanOrEqual(1000);
+    const context = JSON.stringify(h.requests.at(-1));
+    expect(context).toContain("REPORT_START");
+    expect(context).toContain("REPORT_END");
+    expect(context).toContain("report_truncated");
+    expect(await readFile(file, "utf8")).toBe(original);
   });
 });

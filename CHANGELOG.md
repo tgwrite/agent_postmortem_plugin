@@ -4,6 +4,13 @@ User-facing changes are recorded here. Version numbers before 1.0 indicate an ev
 
 ## Unreleased
 
+## 0.2.3 — 2026-09-09
+
+- Raise default checkpoint output to 8,192 tokens and the request timeout to 180 seconds; preserve the selected thinking level and provide an explicit report-length target.
+- Add a 64,000-token estimated checkpoint input ceiling with model-window reservations, while retaining existing character caps.
+- Bound final checkpoint context to 32,000 estimated tokens and available model space, with explicit excerpts, omissions, and persisted budget metadata.
+- Add configurable input ceilings; extend output and timeout flag ranges to 32,768 tokens and 600 seconds.
+
 - Add the MIT license, English and Chinese quick-start guides, a synthetic report example, architecture documentation, and contribution guidance.
 - Add Linux and Windows CI, issue forms, and a pull request template.
 - Complete repository metadata for GitHub distribution. npm publishing remains disabled.

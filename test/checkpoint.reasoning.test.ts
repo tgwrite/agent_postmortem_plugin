@@ -8,7 +8,7 @@ import { CHECKPOINT_SYSTEM_PROMPT } from "../src/checkpoint/prompt.js";
 import { MODEL } from "./harness.js";
 
 const glm: Model<"openai-completions"> = {
-  ...MODEL, id: "glm-5.3-flash", reasoning: true,
+  ...MODEL, id: "glm-5.3-flash", reasoning: true, maxTokens: 16384,
   compat: { supportsDeveloperRole: false, supportsReasoningEffort: true,
     maxTokensField: "max_tokens", thinkingFormat: "zai", zaiToolStream: true },
   thinkingLevelMap: { off: null, minimal: null, low: "low", medium: null, high: "high", xhigh: null, max: "max" },
@@ -71,7 +71,7 @@ describe("GLM thinking transport regression", () => {
     const fixed = await f.call("high");
     expect(fixed.stopReason).toBe("stop");
     expect(fixed.content).toContainEqual(expect.objectContaining({ type: "text", text: expect.stringContaining("Supported finding.") }));
-    expect(f.requests[1]).toMatchObject({ thinking: { type: "enabled" }, reasoning_effort: "high", max_tokens: 2048 });
+    expect(f.requests[1]).toMatchObject({ thinking: { type: "enabled" }, reasoning_effort: "high", max_tokens: 8192 });
     expect(f.requests[1].tools ?? []).toEqual([]);
     expect(f.requests[1].messages[0].content).toBe(CHECKPOINT_SYSTEM_PROMPT);
   });

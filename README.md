@@ -8,7 +8,7 @@ Task reflection for [Pi](https://pi.dev): save execution checkpoints before cont
 
 Long sessions can lose execution details during compaction. This plugin saves a separate reflection of each eligible segment for the final review. It can review successful, failed, blocked, or partially completed tasks.
 
-**Status:** early release, v0.2.2. Automated tests verify behavior with a deterministic local model provider; they do not establish the quality of real-model reflections.
+**Status:** early release, v0.2.3. Automated tests verify behavior with a deterministic local model provider; they do not establish the quality of real-model reflections.
 
 ## What it does
 
@@ -63,18 +63,24 @@ Paths use Pi's current extension working directory. Each final review creates on
 
 ## Configuration and cost
 
-By default, each normal compaction adds one model call using the current model. The checkpoint request has a 45-second timeout and an output limit of 2,048 tokens. Provider charges depend on the model and input size; the final review also uses the configured model.
+By default, each normal compaction adds one model call using the current model. The checkpoint request has a 180-second timeout and an output limit of 8,192 tokens. Provider charges depend on the model and input size; the final review also uses the configured model.
 
 | Flag | Default | Behavior |
 | --- | --- | --- |
 | `--postmortem-no-checkpoints` | `false` | Disable new automatic checkpoints; keep final reviews and aggregation of existing checkpoints. |
-| `--postmortem-checkpoint-timeout-ms` | `45000` | Model request timeout, from 1 to 60000 ms. |
-| `--postmortem-checkpoint-max-tokens` | `2048` | Output limit, from 1 to 8192 tokens, capped by the model's limit. |
+| `--postmortem-checkpoint-timeout-ms` | `180000` | Model request timeout, from 1 to 600000 ms. |
+| `--postmortem-checkpoint-max-tokens` | `8192` | Output limit, from 1 to 32768 tokens, capped by the model's limit. |
+| `--postmortem-checkpoint-max-input-tokens` | `64000` | Estimated complete checkpoint input ceiling, from 1 to 256000; also constrained by the model window and character caps. |
+| `--postmortem-final-checkpoint-max-input-tokens` | `32000` | Estimated ceiling for saved checkpoints added to the final review, from 1 to 128000. |
+
+Token budgets use an estimate of UTF-8 bytes divided by two, not a model-specific tokenizer. The checkpoint input includes its system prompt and encoded user payload; it reserves the requested output plus 10% of the model window (at least 2,048 tokens). The existing 120,000-character execution cap and 12,000-character previous-summary cap still apply, so increasing the estimated token ceiling alone does not expand those caps. The report is asked to target at most 3,500 tokens, or half its effective output budget if lower, leaving headroom for reasoning. The session's thinking level is preserved.
+
+Final review output remains controlled by Pi. Its added checkpoint context is constrained by the estimated space left after current messages, system prompt, the model's maximum output, and the same safety margin. When necessary, it uses marked beginning/end excerpts across stages, then omits older stages if even short excerpts cannot fit. The original files are preserved; report metadata records excerpted and omitted checkpoint IDs. These estimates cannot guarantee that every provider will accept the request.
 
 After installation, for example:
 
 ```sh
-pi --postmortem-checkpoint-timeout-ms 30000 --postmortem-checkpoint-max-tokens 4096
+pi --postmortem-checkpoint-timeout-ms 180000 --postmortem-checkpoint-max-tokens 8192
 ```
 
 Invalid numeric values fall back to defaults. The timeout covers the checkpoint model request, not the entire compaction. Checkpoint calls are not retried.
@@ -85,7 +91,7 @@ Invalid numeric values fall back to defaults. The timeout covers the checkpoint 
 - **Local storage:** checkpoint and final report files may contain task details. The final prompt and assistant reply also remain in Pi's session history. Redact reports and logs before sharing them.
 - **Provider retention:** the checkpoint requests `cacheRetention: "none"`; this is not a guarantee about the provider's logging or retention policy.
 - **Visibility:** the model does not gain access to the full session file. Truncated input, missing files, failed checkpoints, and context lost before loading the plugin can limit the review.
-- **Long sessions:** valid checkpoints are aggregated without a second summarization pass; their accumulated input can exceed a model's context window.
+- **Long sessions:** checkpoint aggregation has an estimated input ceiling and explicit excerpt/omission markers. The current task context and provider-specific token accounting can still cause an overflow.
 - **Interpretation:** reports are model-generated reflections, not independently verified audits. Review important conclusions against the actual task evidence.
 
 ## Development and support
